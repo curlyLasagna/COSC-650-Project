@@ -9,7 +9,7 @@ compile:
 # Run the server
 server: compile
     @echo "Starting server..."
-    java -cp bin NetServerV2 &
+    java -cp bin NetServerV2
     @echo "Server started in background."
 
 # Run the client
