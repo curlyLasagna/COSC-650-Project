@@ -13,20 +13,25 @@ A course project that simulates a client and a server sending datagrams to each 
 
 All messages between the client `C` and the server `S` are carried over UDP.
 
-Some messages may be received out of order, and some may be lost. The messages sent by the server `S` to
-the client `C` must have the following three fields:
-- Sequence number: int (sequence numbers alternate as 0, 1, 0, 1, …)
-- Payload Length: int (size of the payload in bytes)
-- Payload: data bytes in packet (maximum size of the payload is 1024 bytes)
+Some messages may be received out of order, and some may be lost. 
 
-The server `S` runs as localhost and uses port 11122. `S` first asks the user to enter a timeout period ts in seconds.
+The messages sent by the server `S` to the client `C` must have the following three fields:
 
-The client `C` asks the user to enter a string s with the name of a Web server W in the form:
-www.name.suf (for example, `s=www.towson.edu`).
+- **Sequence number**: int (sequence numbers alternate as 0, 1, 0, 1, …)
+- **Payload Length**: int (size of the payload in bytes)
+- **Payload**: data bytes in packet (maximum size of the payload is 1024 bytes)
+
+The server `S` runs as localhost and uses port 11122. 
+
+`S` first asks the user to enter a timeout period ts in seconds.
+
+The client `C` asks the user to enter a string s with the name of a Web server W in the form: `www.name.suf` (for example, `s=www.towson.edu`).
 
 It then sends a message to `S` that has the bytes of the string `s` as payload.
-1.2 When the server `S` gets the client request, it starts a separate handler (thread) for the client `C`. The
-server `S` does all the client-related processing and communication using the handler.
+
+When the server `S` gets the client request, it starts a separate handler (thread) for the client `C`. 
+
+The server `S` does all the client-related processing and communication using the handler.
 
 The main thread in the server `S` only listens for client requests.
 
