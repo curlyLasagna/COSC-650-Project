@@ -5,8 +5,8 @@ import java.net.Socket;
 
 public class JavaNetClientV2 {
     public static void main(String[] args) {
-        Scanner myScanner = new Scanner(System.in); // Create a Scanner object
-        System.out.println("Enter a web address you'd like to get");
+        Scanner myScanner = new Scanner(System.in);
+        System.out.println("Enter a web address");
         String webServer = myScanner.nextLine();
         String host = "127.0.0.1";
         int port = 11122;

@@ -6,32 +6,18 @@ import java.net.Socket;
 
 public class NetServerV2 extends Thread {
 
-	public class ClientListener {
-
-	}
-
 	public static void main(String[] args) {
-		Scanner myScanner = new Scanner(System.in); // Create a Scanner object
-		System.out.println("Enter the IP address of the server, Enter for loopback");
-		String host = myScanner.nextLine();
-		if (host.isEmpty()) {
-			host = "127.0.0.1";
-		}
-
-		// Default port of 11122
+		Scanner myScanner = new Scanner(System.in);
+		String host = "127.0.0.1";
 		int port = 11122;
-		System.out.println("Enter timeout period");
-		if (myScanner.nextLine().isEmpty()) {
-		}
+		int timeout = 5;
 
 		try {
 			ServerSocket serverSocket = new ServerSocket();
 			serverSocket.bind(new InetSocketAddress(host, port));
-			System.out.println("Server: Listening on " + host + ":" + port);
 
 			while (true) {
 				Socket clientSocket = serverSocket.accept();
-				System.out.println("Connected from: " + clientSocket.getRemoteSocketAddress());
 				clientSocket.getOutputStream().write("Hello Client".getBytes());
 				clientSocket.close();
 				System.exit(0);
