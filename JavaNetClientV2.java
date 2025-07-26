@@ -1,30 +1,38 @@
-import java.util.Scanner;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
 
 public class JavaNetClientV2 {
+    public static void main(String args[]) throws Exception {
 
-    final static String HOST = "127.0.0.1";
-    final static int PORT = 11122;
+        //create inpurt stream
+        BufferedReader inFromUser = new BufferedReader(new InputStreamReader(System.in));
 
-    public static void main(String[] args) {
-        Scanner myScanner = new Scanner(System.in);
-        System.out.println("Enter a web address");
-        String webServer = myScanner.nextLine();
-        myScanner.close();
+        //create client socket
+        DatagramSocket clientSocket = new DatagramSocket();
+        
+        //translate hostname to IP address
+        InetAddress IPAddress = InetAddress.getByName("127.0.0.1");
 
-        try (Socket client = new Socket()) {
-            client.connect(new InetSocketAddress(HOST, PORT));
-            byte[] buffer = new byte[1024];
-            int bytesRead = client.getInputStream().read(buffer);
-            if (bytesRead > 0) {
-                System.out.println("Received: " + new String(buffer, 0, bytesRead));
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        byte[] sendData = new byte[1024];
+        byte[] receiveData = new byte[1024];
 
-        System.out.println("Client: Disconnected from Server");
+        System.out.print("Enter a web address: ");
+        String sentence = inFromUser.readLine();
+        sendData = sentence.getBytes();
+
+        //create datagram with data to send
+        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, 11122);
+
+        //send datagram to server
+        clientSocket.send(sendPacket);
+
+        //read datagram from server
+        DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+        clientSocket.receive(receivePacket);
+        
+        String modifiedSentence = new String(receivePacket.getData(), 0, receivePacket.getLength());
+        System.out.println("FROM SERVER: " + modifiedSentence);
+
+        clientSocket.close();
     }
 }
