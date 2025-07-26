@@ -4,15 +4,18 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 
 public class JavaNetClientV2 {
+
+    final static String HOST = "127.0.0.1";
+    final static int PORT = 11122;
+
     public static void main(String[] args) {
         Scanner myScanner = new Scanner(System.in);
         System.out.println("Enter a web address");
         String webServer = myScanner.nextLine();
-        String host = "127.0.0.1";
-        int port = 11122;
+        myScanner.close();
 
         try (Socket client = new Socket()) {
-            client.connect(new InetSocketAddress(host, port));
+            client.connect(new InetSocketAddress(HOST, PORT));
             byte[] buffer = new byte[1024];
             int bytesRead = client.getInputStream().read(buffer);
             if (bytesRead > 0) {
