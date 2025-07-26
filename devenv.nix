@@ -1,11 +1,21 @@
-{ pkgs, lib, config, inputs, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  inputs,
+  ...
+}:
 
 {
   # https://devenv.sh/basics/
   env.GREET = "devenv";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.just pkgs.jdt-language-server ];
+  packages = [
+    pkgs.just
+    pkgs.jdt-language-server
+    pkgs.python313Packages.grip
+  ];
 
   # https://devenv.sh/languages/
   languages.java.enable = true;
@@ -22,8 +32,8 @@
   '';
 
   enterShell = ''
-  	hello
-	java --version
+      	hello
+    	java --version
   '';
 
   # https://devenv.sh/tasks/
