@@ -11,7 +11,7 @@ public class JavaNetClientV2 {
         DatagramSocket clientSocket = new DatagramSocket();
         
         //translate hostname to IP address
-        InetAddress IPAddress = InetAddress.getByName("127.0.0.1");
+        InetAddress IPAddress = InetAddress.getByName("localhost");
 
         byte[] sendData = new byte[1024];
         byte[] receiveData = new byte[1024];

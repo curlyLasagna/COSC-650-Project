@@ -21,17 +21,6 @@ public class NetServerV2 {
             String webAddress = new String(receivePacket.getData(), 0, receivePacket.getLength());
             System.out.println("Received: " + webAddress);
 
-			// InetAddress IPAddress = receivePacket.getAddress();
-			// int port = receivePacket.getPort();
-
-			// //prepare response
-			// String capitalizedSentence = sentence.toUpperCase();
-			// sendData = capitalizedSentence.getBytes();
-
-			// //send response
-			// DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
-			// serverSocket.send(sendPacket);
-
 			new Thread(new ClientHandler(webAddress, receivePacket.getAddress(), receivePacket.getPort())).start();
 		}
 	}
@@ -66,9 +55,6 @@ class ClientHandler implements Runnable{
 			}
 			byte[] fullPage = buffer.toByteArray();
 			System.out.println("Fetched " +  fullPage.length + " bytes from " + webAddress);
-
-			// int lengthToSend = Math.min(1024, fullPage.length);
-			// byte[] firstChunk = Arrays.copyOfRange(fullPage, 0, lengthToSend);
 
 			DatagramSocket socket = new DatagramSocket();
 			int chunkSize = 1024; 
