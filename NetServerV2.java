@@ -7,7 +7,10 @@ public class NetServerV2 {
     public static void main(String[] args) throws Exception {
 
         DatagramSocket serverSocket = new DatagramSocket(11122);
+<<<<<<< HEAD
         //System.out.println("UDP server running on port 11122");
+=======
+>>>>>>> 2-send-a-get-request-from-server
 
         byte[] receiveData = new byte[1024];
         byte[] sendData = new byte[1024];
@@ -39,7 +42,12 @@ class ClientHandler implements Runnable{
 	@Override
 	public void run(){
 		try {
+<<<<<<< HEAD
 			//fethc html content from web address
+=======
+			// fetch html content from web address
+			// TODO: Break into a separate function that returns the body
+>>>>>>> 2-send-a-get-request-from-server
 			URL url = new URL("https://" + webAddress);
 			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 			conn.setRequestMethod("GET");
@@ -72,6 +80,11 @@ class ClientHandler implements Runnable{
 
 				//create packet with chunk 
 				DatagramPacket packet = new DatagramPacket(payload, payload.length, clientIP, clientPort);
+<<<<<<< HEAD
+=======
+
+				// Send out to client
+>>>>>>> 2-send-a-get-request-from-server
 				socket.send(packet);
 
 				System.out.println("Sent chunk " + (offset / chunkSize + 1));
