@@ -1,111 +1,170 @@
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Scanner;
 
-
-public class NetServerV2 {
-    public static void main(String[] args) throws Exception {
-
-        DatagramSocket serverSocket = new DatagramSocket(11122);
-<<<<<<< HEAD
-        //System.out.println("UDP server running on port 11122");
-=======
->>>>>>> 2-send-a-get-request-from-server
-
-        byte[] receiveData = new byte[1024];
-        byte[] sendData = new byte[1024];
-
-        while (true) {
-            //wait for message
-            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            serverSocket.receive(receivePacket);
-
-            //get client input
-            String webAddress = new String(receivePacket.getData(), 0, receivePacket.getLength());
-            System.out.println("Received: " + webAddress);
-
-			new Thread(new ClientHandler(webAddress, receivePacket.getAddress(), receivePacket.getPort())).start();
-		}
-	}
-}
-
-class ClientHandler implements Runnable{
+class ClientHandler implements Runnable {
 	private String webAddress;
 	private InetAddress clientIP;
 	private int clientPort;
+	private DatagramSocket socket;
+	private int timeout;
 
-	public ClientHandler(String webAddress, InetAddress clientIP, int clientPort){
+	public ClientHandler(String webAddress, InetAddress clientIP, int clientPort, int timeout) throws SocketException {
 		this.webAddress = webAddress;
 		this.clientIP = clientIP;
 		this.clientPort = clientPort;
+		this.timeout = timeout;
+		this.socket = new DatagramSocket();
+		this.socket.setSoTimeout(this.timeout);
 	}
-	@Override
-	public void run(){
-		try {
-<<<<<<< HEAD
-			//fethc html content from web address
-=======
-			// fetch html content from web address
-			// TODO: Break into a separate function that returns the body
->>>>>>> 2-send-a-get-request-from-server
-			URL url = new URL("https://" + webAddress);
-			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-			conn.setRequestMethod("GET");
 
-			//read response
-			InputStream inputStream = conn.getInputStream();
-			ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-			byte[] chunk = new byte[1024];
-			int bytesRead;
-			//read in chunks
-			while((bytesRead = inputStream.read(chunk)) != -1){
-				buffer.write(chunk, 0, bytesRead);
-			}
-			byte[] fullPage = buffer.toByteArray();
-			System.out.println("Fetched " +  fullPage.length + " bytes from " + webAddress);
+	public byte[] getWebServerRes() throws IOException, InterruptedException {
+		HttpClient client = HttpClient.newBuilder()
+				// In cases where you get a 301, which results in the response returning nothing
+				.followRedirects(HttpClient.Redirect.ALWAYS)
+				.build();
 
-			DatagramSocket socket = new DatagramSocket();
-			int chunkSize = 1024; 
-			int totalBytes = fullPage.length;
-			int offset = 0;
+		HttpRequest req = HttpRequest.newBuilder()
+				.uri(URI.create("https://" + this.webAddress))
+				.build();
 
-			//loop until all bytes sent
-			while(offset < totalBytes){
+		byte[] resBody;
+		HttpResponse<byte[]> res = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+		System.out.println("Status: " + res.statusCode());
+		resBody = res.body();
+		return resBody;
+	}
 
-				int bytesRemaining = totalBytes - offset;
-				int currentChunkSize = Math.min(chunkSize, bytesRemaining);
+	public void sendResToClient(byte[] data) throws IOException, InterruptedException {
+		// Send data in chunks to avoid packet size issues
+		int chunkSize = 1024;
+		int totalBytes = data.length;
+		int offset = 0;
 
-				//extract chunk to send in this packet
-				byte[] payload = Arrays.copyOfRange(fullPage, offset, offset + currentChunkSize);
+		System.out.println();
+		while (offset < totalBytes) {
+			int seqNum = 0;
+			int bytesRemaining = totalBytes - offset;
+			int currentChunkSize = Math.min(chunkSize, bytesRemaining);
 
-				//create packet with chunk 
-				DatagramPacket packet = new DatagramPacket(payload, payload.length, clientIP, clientPort);
-<<<<<<< HEAD
-=======
+			// Extract the chunk of payload
+			byte[] payload = Arrays.copyOfRange(data, offset, offset + currentChunkSize);
 
+			// Stores the message in a byte buffer
+			// 4 bytes for seqNum:int
+			// 4 bytes for payload length:int
+			// Whatever the payload length is
+			ByteBuffer buffer = ByteBuffer.allocate((Integer.BYTES * 2) + payload.length);
+			buffer.putInt(seqNum);
+			buffer.putInt(payload.length);
+			buffer.put(payload);
+
+			// create packet with a chunk of res.body of size currentChunkSize
+			DatagramPacket packet = new DatagramPacket(
+					buffer.array(),
+					buffer.array().length,
+					clientIP,
+					clientPort);
+
+			boolean receivedAck = false;
+			while (!receivedAck) {
 				// Send out to client
->>>>>>> 2-send-a-get-request-from-server
-				socket.send(packet);
+				this.socket.send(packet);
 
-				System.out.println("Sent chunk " + (offset / chunkSize + 1));
-				offset += currentChunkSize;
+				// Wait for ACK from client, which is an int of 4 bytes
+				byte[] ackBuffer = new byte[4];
+				DatagramPacket ackPacket = new DatagramPacket(
+						ackBuffer,
+						ackBuffer.length);
 
 				try {
-    				Thread.sleep(30);
-				} 
-				catch (InterruptedException e) {
-    				e.printStackTrace();
+					this.socket.receive(ackPacket);
+					ByteBuffer ackByteBuffer = ByteBuffer.wrap(ackPacket.getData());
+					int clientSeqNum = ackByteBuffer.getInt();
+
+					if (clientSeqNum == (seqNum ^ 1)) {
+						receivedAck = true;
+						offset += currentChunkSize;
+						// Alternate sequence number for next chunk
+						seqNum = seqNum ^ 1;
+					} else {
+						System.out.println("ACK mismatch. Resending chunk " + (offset / chunkSize + 1));
+					}
+				} catch (SocketTimeoutException e) {
+					System.out.println(e.getMessage());
 				}
-
 			}
-		
-			System.out.println("Sent entire page to client" + fullPage.length + " bytes");
-
-			socket.close();
 		}
-		catch (IOException e){
-			System.err.print("Error: " + e.getMessage());
+	}
+
+	@Override
+	public void run() {
+		try {
+			byte[] serverResponse = getWebServerRes();
+			sendResToClient(serverResponse);
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 	}
 }
-			  
+
+public class NetServerV2 {
+	public static void main(String[] args) throws Exception {
+
+		// Scanner scanner = new Scanner(System.in);
+		// System.out.println("Enter a timeout in seconds for the server to wait for a
+		// client request:");
+		// int timeout = scanner.nextInt();
+		int timeout = 10;
+		// scanner.close();
+
+		DatagramSocket serverSocket = new DatagramSocket(11122);
+
+		// Close server socket on SIGTERM
+		Runtime.getRuntime().addShutdownHook(new Thread(
+				() -> {
+					System.out.println("\nShutting down server...");
+					serverSocket.close();
+				}));
+
+		while (true) {
+			try {
+				byte[] receiveData = new byte[1024];
+				DatagramPacket clientPacket = new DatagramPacket(receiveData, receiveData.length);
+				// Anticipate client request
+				serverSocket.receive(clientPacket);
+
+				// byte [] to String conversion
+				String webAddress = new String(
+						clientPacket.getData(),
+						0,
+						clientPacket.getLength());
+
+				System.out.println("Received: " + webAddress);
+
+				ClientHandler client = new ClientHandler(webAddress,
+						clientPacket.getAddress(),
+						clientPacket.getPort(),
+						timeout);
+
+				// Start a new thread to handle the client request
+				new Thread(client).start();
+			} catch (SocketException e) {
+				e.printStackTrace();
+				break;
+			}
+		}
+	}
+}
