@@ -50,10 +50,9 @@ class ClientHandler implements Runnable {
 		int chunkSize = 1024;
 		int totalBytes = data.length;
 		int offset = 0;
+		int seqNum = 0;
 
-		System.out.println();
 		while (offset < totalBytes) {
-			int seqNum = 0;
 			int bytesRemaining = totalBytes - offset;
 			int currentChunkSize = Math.min(chunkSize, bytesRemaining);
 
@@ -96,7 +95,7 @@ class ClientHandler implements Runnable {
 						receivedAck = true;
 						offset += currentChunkSize;
 						// Alternate sequence number for next chunk
-						seqNum = seqNum ^ 1;
+						seqNum ^= 1;
 					} else {
 						System.out.println("ACK mismatch. Resending chunk " + (offset / chunkSize + 1));
 					}
