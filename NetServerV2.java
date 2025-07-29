@@ -67,7 +67,6 @@ class ClientHandler implements Runnable {
 			buffer.putInt(seqNum);
 			buffer.putInt(payload.length);
 			buffer.put(payload);
-
 			// create packet with a chunk of res.body of size currentChunkSize
 			DatagramPacket packet = new DatagramPacket(
 					buffer.array(),
@@ -78,7 +77,7 @@ class ClientHandler implements Runnable {
 			boolean receivedAck = false;
 			while (!receivedAck) {
 				// Send out to client
-				this.socket.send(packet);
+				socket.send(packet);
 
 				// Wait for ACK from client, which is an int of 4 bytes
 				byte[] ackBuffer = new byte[4];
@@ -87,7 +86,7 @@ class ClientHandler implements Runnable {
 						ackBuffer.length);
 
 				try {
-					this.socket.receive(ackPacket);
+					socket.receive(ackPacket);
 					ByteBuffer ackByteBuffer = ByteBuffer.wrap(ackPacket.getData());
 					int clientSeqNum = ackByteBuffer.getInt();
 
@@ -144,7 +143,7 @@ public class NetServerV2 {
 				DatagramPacket clientPacket = new DatagramPacket(receiveData, receiveData.length);
 				// Anticipate client request
 				serverSocket.receive(clientPacket);
-
+				System.out.println(clientPacket.getPort());
 				// byte [] to String conversion
 				String webAddress = new String(
 						clientPacket.getData(),

@@ -47,11 +47,12 @@ public class JavaNetClientV2 {
     public static Message receiveResponseFromServer() throws IOException {
         // Receive the response from the server
         // Sequence number + payload length + payload
-        byte[] receivedData = new byte[(Integer.BYTES * 2) + CHUNK_SIZE];
-        DatagramPacket receivePacket = new DatagramPacket(receivedData, receivedData.length);
-        clientSocket.receive(receivePacket);
+        byte[] datagramBuffer = new byte[(Integer.BYTES * 2) + CHUNK_SIZE];
+        DatagramPacket datagramFromServer = new DatagramPacket(datagramBuffer, datagramBuffer.length);
+        clientSocket.receive(datagramFromServer);
+        System.out.println(clientSocket.getPort());
 
-        ByteBuffer serverBuffer = ByteBuffer.wrap(receivePacket.getData(), 0, receivePacket.getLength());
+        ByteBuffer serverBuffer = ByteBuffer.wrap(datagramFromServer.getData(), 0, datagramFromServer.getLength());
 
         return new Message(
                 // sequence number
@@ -80,8 +81,9 @@ public class JavaNetClientV2 {
 
             // Allocate a buffer for the ACK
             ByteBuffer ackBuffer = ByteBuffer.allocate(Integer.BYTES);
-            // Return an alternate sequence number
+            // Return an ACK datagram with an alternate sequence number
             ackBuffer.putInt(msg.getSeqNum() ^ 1);
+
             DatagramPacket ackPacket = new DatagramPacket(
                     ackBuffer.array(),
                     Integer.BYTES,
@@ -95,7 +97,6 @@ public class JavaNetClientV2 {
                 fullResReceived = true;
             }
         }
-
-        // clientSocket.close();
+        clientSocket.close();
     }
 }
