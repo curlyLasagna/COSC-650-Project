@@ -3,7 +3,6 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
-import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -11,18 +10,25 @@ import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Scanner;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 
 class ClientHandler implements Runnable {
 	private String webAddress;
 	private InetAddress clientIP;
 	private int clientPort;
 	private int timeout;
+	private DatagramSocket socket;
+	private BlockingQueue<DatagramPacket> ackQueue = new LinkedBlockingQueue<>();
 
-	public ClientHandler(String webAddress, InetAddress clientIP, int clientPort, int timeout) throws SocketException {
+	public ClientHandler(String webAddress, InetAddress clientIP, int clientPort, int timeout, DatagramSocket socket)
+			throws SocketException {
 		this.webAddress = webAddress;
 		this.clientIP = clientIP;
 		this.clientPort = clientPort;
 		this.timeout = timeout;
+		this.socket = socket;
 	}
 
 	public byte[] getWebServerRes() throws IOException, InterruptedException {
@@ -41,6 +47,10 @@ class ClientHandler implements Runnable {
 		return resBody;
 	}
 
+	public void receiveAck(DatagramPacket ackPacket) {
+		ackQueue.offer(ackPacket);
+	}
+
 	public void sendResToClient(byte[] data) throws IOException, InterruptedException {
 		// Send data in chunks to avoid packet size issues
 		int chunkSize = 1024;
@@ -48,8 +58,6 @@ class ClientHandler implements Runnable {
 		int offset = 0;
 		int seqNum = 0;
 
-		DatagramSocket socket = new DatagramSocket();
-		socket.setSoTimeout(timeout * 1000);
 		while (offset < totalBytes) {
 			int bytesRemaining = totalBytes - offset;
 			int currentChunkSize = Math.min(chunkSize, bytesRemaining);
@@ -57,13 +65,16 @@ class ClientHandler implements Runnable {
 			// Extract the chunk of payload
 			byte[] payload = Arrays.copyOfRange(data, offset, offset + currentChunkSize);
 
+			int isLastChunk = (bytesRemaining <= chunkSize) ? 1 : 0;
+
 			// Stores the message in a byte buffer
 			// 4 bytes for seqNum:int
 			// 4 bytes for payload length:int
 			// Whatever the payload length is
-			ByteBuffer buffer = ByteBuffer.allocate((Integer.BYTES * 2) + payload.length);
+			ByteBuffer buffer = ByteBuffer.allocate((Integer.BYTES * 3) + payload.length);
 			buffer.putInt(seqNum);
 			buffer.putInt(payload.length);
+			buffer.putInt(isLastChunk);
 			buffer.put(payload);
 			// create packet with a chunk of res.body of size currentChunkSize
 			DatagramPacket packet = new DatagramPacket(
@@ -77,50 +88,58 @@ class ClientHandler implements Runnable {
 				// Send out to client
 				socket.send(packet);
 
-				// Wait for ACK from client, which is an int of 4 bytes
-				byte[] ackBuffer = new byte[4];
-				DatagramPacket ackPacket = new DatagramPacket(
-						ackBuffer,
-						ackBuffer.length);
-
 				try {
-					socket.receive(ackPacket);
-					ByteBuffer ackByteBuffer = ByteBuffer.wrap(ackPacket.getData());
-					int clientSeqNum = ackByteBuffer.getInt();
+					// Wait for ACK from client, which is an int of 4 bytes
+					DatagramPacket ackPacket = ackQueue.poll(timeout, java.util.concurrent.TimeUnit.SECONDS);
 
-					if (clientSeqNum == (seqNum ^ 1)) {
-						receivedAck = true;
-						offset += currentChunkSize;
-						// Alternate sequence number for next chunk
-						seqNum ^= 1;
+					// if there's an ACK packet in the queue, read the sequence number to determine
+					// if there's an ACK mismatch
+					if (ackPacket != null) {
+						ByteBuffer ackByteBuffer = ByteBuffer.wrap(ackPacket.getData());
+						int clientSeqNum = ackByteBuffer.getInt();
+
+						if (clientSeqNum == (seqNum ^ 1)) {
+							receivedAck = true;
+							offset += currentChunkSize;
+							// Alternate sequence number for next chunk
+							seqNum ^= 1;
+						} else {
+							System.out.println("ACK mismatch. Resending chunk " + (offset / chunkSize + 1));
+						}
 					} else {
-						System.out.println("ACK mismatch. Resending chunk " + (offset / chunkSize + 1));
+						System.out.println("No ACK received. Resending chunk " + (offset / chunkSize + 1));
 					}
-				} catch (SocketTimeoutException e) {
-					System.out.println("Timeout waiting for ACK. Resending chunk " + (offset / chunkSize + 1));
-					// e.printStackTrace();
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					break;
 				}
 			}
 		}
 		System.out.println("All chunks sent successfully to client: " + clientIP + ":" + clientPort);
-		socket.close();
 	}
 
 	@Override
 	public void run() {
 		try {
-			// socket.setSoTimeout(this.timeout * 1000);
 			byte[] serverResponse = getWebServerRes();
 			sendResToClient(serverResponse);
-		} catch (IOException e) {
+		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+		} finally {
+			NetServerV2.removeClient(clientPort);
 		}
 	}
 }
 
 public class NetServerV2 {
+
+	public static void removeClient(int clientKey) {
+		clientHandlers.remove(clientKey);
+	}
+
+	// Map to hold client handlers by their port number
+	private static final ConcurrentHashMap<Integer, ClientHandler> clientHandlers = new ConcurrentHashMap<>();
+
 	public static void main(String[] args) throws Exception {
 
 		Scanner scanner = new Scanner(System.in);
@@ -137,26 +156,39 @@ public class NetServerV2 {
 					serverSocket.close();
 				}));
 
+		// Listen for incoming client requests
 		while (true) {
 			byte[] receiveData = new byte[1024];
 			DatagramPacket clientPacket = new DatagramPacket(receiveData, receiveData.length);
 			// Anticipate client request
 			serverSocket.receive(clientPacket);
-			// byte [] to String conversion
-			String webAddress = new String(
-					clientPacket.getData(),
-					0,
-					clientPacket.getLength());
 
-			System.out.println("Received: " + webAddress);
+			// Populate map of client state with client key
+			int clientKey = clientPacket.getPort();
+			ClientHandler clientHandler;
+			// Route an ACK packet to the proper thread
+			if (clientPacket.getLength() == 4) {
+				clientHandler = clientHandlers.get(clientKey);
+				clientHandler.receiveAck(clientPacket);
+			} else {
+				// byte [] to String conversion
+				String webAddress = new String(
+						clientPacket.getData(),
+						0,
+						clientPacket.getLength());
 
-			ClientHandler client = new ClientHandler(webAddress,
-					clientPacket.getAddress(),
-					clientPacket.getPort(),
-					timeout);
+				System.out.println("Received: " + webAddress);
 
-			// Start a new thread to handle the client request
-			new Thread(client).start();
+				clientHandler = new ClientHandler(webAddress,
+						clientPacket.getAddress(),
+						clientPacket.getPort(),
+						timeout,
+						serverSocket);
+
+				clientHandlers.put(clientKey, clientHandler);
+				// Start a new thread to handle the client request
+				new Thread(clientHandler).start();
+			}
 		}
 	}
 }

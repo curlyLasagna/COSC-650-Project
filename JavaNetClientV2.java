@@ -48,15 +48,15 @@ public class JavaNetClientV2 {
     public static HashMap<String, Object> receiveResponseFromServer() throws IOException {
         // Receive the response from the server
         // Sequence number + payload length + payload
-        byte[] datagramBuffer = new byte[(Integer.BYTES * 2) + CHUNK_SIZE];
+        byte[] datagramBuffer = new byte[(Integer.BYTES * 3) + CHUNK_SIZE];
         DatagramPacket datagramFromServer = new DatagramPacket(datagramBuffer, datagramBuffer.length);
         clientSocket.receive(datagramFromServer);
 
         ByteBuffer serverBuffer = ByteBuffer.wrap(datagramFromServer.getData(), 0, datagramFromServer.getLength());
 
-        int serverPort = datagramFromServer.getPort();
         int seqNum = serverBuffer.getInt();
         int payloadLength = serverBuffer.getInt();
+        int isLastChunk = serverBuffer.getInt();
         byte[] payloadBytes = new byte[payloadLength];
         serverBuffer.get(payloadBytes);
 
@@ -65,8 +65,8 @@ public class JavaNetClientV2 {
         return new HashMap<String, Object>() {
             {
                 put("seqNum", seqNum);
-                put("port", serverPort);
                 put("payload", payload);
+                put("isLastChunk", isLastChunk);
             }
         };
     }
@@ -102,15 +102,17 @@ public class JavaNetClientV2 {
                     ackBuffer.array(),
                     Integer.BYTES,
                     SERVER_ADDRESS,
-                    (Integer) response.get("port"));
+                    PORT);
 
             // Send ACK back to server
             clientSocket.send(ackPacket);
 
-            if (msg.getLength() < CHUNK_SIZE) {
+            if (response.get("isLastChunk").equals(1)) {
                 fullResReceived = true;
+                System.out.println("Full response: " + fullRes.toString());
             }
         }
+
         clientSocket.close();
     }
 }
