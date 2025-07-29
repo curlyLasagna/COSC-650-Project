@@ -43,8 +43,10 @@ class ClientHandler implements Runnable {
 	}
 
 	/**
+	 * Performs a GET request to the specified web server by the client
+	 * Redirects are followed automatically
 	 * 
-	 * @return
+	 * @return byte[] The response body from the web server
 	 * @throws IOException
 	 * @throws InterruptedException
 	 */
@@ -65,6 +67,7 @@ class ClientHandler implements Runnable {
 	}
 
 	/**
+	 * Adds the ACK packet to the datagram queue for processing.
 	 * 
 	 * @param ackPacket
 	 */
