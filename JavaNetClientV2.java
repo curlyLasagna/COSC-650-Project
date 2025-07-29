@@ -36,6 +36,12 @@ public class JavaNetClientV2 {
     static InetAddress SERVER_ADDRESS;
     static Scanner scanner;
 
+    /**
+     * Initial client datagram to send the web address to the server.
+     * 
+     * @param webAddress: String The web address to send to the server.
+     * @throws IOException
+     */
     public static void sendWebAddressToServer(String webAddress) throws IOException {
         byte[] webServerURL = new byte[CHUNK_SIZE];
         webServerURL = webAddress.getBytes();
@@ -45,6 +51,14 @@ public class JavaNetClientV2 {
         clientSocket.send(webServerPacket);
     }
 
+    /**
+     * Receives the chunk of the web server response from the UDP server.
+     * 
+     * @return HashMap<String, Object>
+     *         Contains the sequence number, payload, and whether it is the last
+     *         chunk.
+     * @throws IOException
+     */
     public static HashMap<String, Object> receiveResponseFromServer() throws IOException {
         // Receive the response from the server
         // Sequence number + payload length + payload
@@ -80,10 +94,14 @@ public class JavaNetClientV2 {
         scanner.close();
 
         sendWebAddressToServer(webAddress);
+
+        // Checks if we've received the entirety of the response from the web server
         boolean fullResReceived = false;
         ByteArrayOutputStream fullRes = new ByteArrayOutputStream();
         while (!fullResReceived) {
             HashMap<String, Object> response = receiveResponseFromServer();
+
+            // Create a Message object from the response that will be sent to the UDP server
             Message msg = new Message(
                     (Integer) response.get("seqNum"),
                     (String) response.get("payload"));
@@ -93,9 +111,10 @@ public class JavaNetClientV2 {
             // Accumulate each chunk of the response
             fullRes.write(msg.getPayload().getBytes());
 
-            // Allocate a buffer for the ACK
+            // Allocate a buffer for the ACK datagram
             ByteBuffer ackBuffer = ByteBuffer.allocate(Integer.BYTES);
-            // Return an ACK datagram with an alternate sequence number
+
+            // Set the sequence number for the ACK
             ackBuffer.putInt(msg.getSeqNum() ^ 1);
 
             DatagramPacket ackPacket = new DatagramPacket(
@@ -104,9 +123,12 @@ public class JavaNetClientV2 {
                     SERVER_ADDRESS,
                     PORT);
 
-            // Send ACK back to server
+            // Send ACK datagram to UDP server
             clientSocket.send(ackPacket);
 
+            // Check if this is the last chunk
+            // If the isLastChunk is 1, then we have received the full response and close
+            // the client's socket
             if (response.get("isLastChunk").equals(1)) {
                 fullResReceived = true;
                 System.out.println("Full response: " + fullRes.toString());

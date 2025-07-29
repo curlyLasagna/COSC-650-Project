@@ -10,7 +10,6 @@ import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Scanner;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -20,8 +19,20 @@ class ClientHandler implements Runnable {
 	private int clientPort;
 	private int timeout;
 	private DatagramSocket socket;
-	private BlockingQueue<DatagramPacket> ackQueue = new LinkedBlockingQueue<>();
+	private LinkedBlockingQueue<DatagramPacket> ackQueue = new LinkedBlockingQueue<>();
 
+	/**
+	 * A ClientHandler is used to communicate with each client.
+	 * It handles sending the web server response in chunks and receiving ACKs.
+	 * 
+	 * @param webAddress: the web address to fetch
+	 * @param clientIP:   the IP address of the client
+	 * @param clientPort: the port of the client. We use this as a key to track the
+	 *                    client.
+	 * @param timeout:    the timeout for waiting for ACK packets
+	 * @param socket:     the DatagramSocket used for communication
+	 * @throws SocketException
+	 */
 	public ClientHandler(String webAddress, InetAddress clientIP, int clientPort, int timeout, DatagramSocket socket)
 			throws SocketException {
 		this.webAddress = webAddress;
@@ -31,6 +42,12 @@ class ClientHandler implements Runnable {
 		this.socket = socket;
 	}
 
+	/**
+	 * 
+	 * @return
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
 	public byte[] getWebServerRes() throws IOException, InterruptedException {
 		HttpClient client = HttpClient.newBuilder()
 				// In cases where you get a 301, which results in the response returning nothing
@@ -47,10 +64,25 @@ class ClientHandler implements Runnable {
 		return resBody;
 	}
 
+	/**
+	 * 
+	 * @param ackPacket
+	 */
 	public void receiveAck(DatagramPacket ackPacket) {
 		ackQueue.offer(ackPacket);
 	}
 
+	/**
+	 * Sends chunks of the webserver response to the client.
+	 * It handles sending the data in chunks and waiting for ACKs from the client.
+	 * for each chunk, it sends a sequence number, payload length, and whether
+	 * it is the last chunk.
+	 * 
+	 * @param data: byte[] The entire web server response data to send to the
+	 *              client.
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
 	public void sendResToClient(byte[] data) throws IOException, InterruptedException {
 		// Send data in chunks to avoid packet size issues
 		int chunkSize = 1024;
@@ -65,11 +97,15 @@ class ClientHandler implements Runnable {
 			// Extract the chunk of payload
 			byte[] payload = Arrays.copyOfRange(data, offset, offset + currentChunkSize);
 
+			// Determine if this is the last chunk since the payload could be less than
+			// chunkSize
+			// This is used to signal the client that this is the last chunk
 			int isLastChunk = (bytesRemaining <= chunkSize) ? 1 : 0;
 
 			// Stores the message in a byte buffer
 			// 4 bytes for seqNum:int
 			// 4 bytes for payload length:int
+			// 4 bytes for isLastChunk:int
 			// Whatever the payload length is
 			ByteBuffer buffer = ByteBuffer.allocate((Integer.BYTES * 3) + payload.length);
 			buffer.putInt(seqNum);
@@ -98,6 +134,7 @@ class ClientHandler implements Runnable {
 						ByteBuffer ackByteBuffer = ByteBuffer.wrap(ackPacket.getData());
 						int clientSeqNum = ackByteBuffer.getInt();
 
+						// Check if the ACK sequence number matches the expected sequence number
 						if (clientSeqNum == (seqNum ^ 1)) {
 							receivedAck = true;
 							offset += currentChunkSize;
@@ -133,12 +170,17 @@ class ClientHandler implements Runnable {
 
 public class NetServerV2 {
 
+	// Map to hold client handlers by their port number
+	private static final ConcurrentHashMap<Integer, ClientHandler> clientHandlers = new ConcurrentHashMap<>();
+
+	/**
+	 * The client is no longer listening, so remove it.
+	 * 
+	 * @param clientKey
+	 */
 	public static void removeClient(int clientKey) {
 		clientHandlers.remove(clientKey);
 	}
-
-	// Map to hold client handlers by their port number
-	private static final ConcurrentHashMap<Integer, ClientHandler> clientHandlers = new ConcurrentHashMap<>();
 
 	public static void main(String[] args) throws Exception {
 
@@ -179,13 +221,16 @@ public class NetServerV2 {
 
 				System.out.println("Received: " + webAddress);
 
+				// Create a new ClientHandler to start communicating with the client
 				clientHandler = new ClientHandler(webAddress,
 						clientPacket.getAddress(),
 						clientPacket.getPort(),
 						timeout,
 						serverSocket);
 
+				// Track new client handler
 				clientHandlers.put(clientKey, clientHandler);
+
 				// Start a new thread to handle the client request
 				new Thread(clientHandler).start();
 			}
