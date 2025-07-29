@@ -15,8 +15,6 @@ server: compile
 # Run the client
 client: compile
     @echo "Starting client..."
-    # Give the server a moment to start up
-    sleep 2
     java -cp bin JavaNetClientV2
 
 # Clean up compiled classes

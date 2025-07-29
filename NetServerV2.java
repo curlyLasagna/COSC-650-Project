@@ -16,7 +16,6 @@ class ClientHandler implements Runnable {
 	private String webAddress;
 	private InetAddress clientIP;
 	private int clientPort;
-	private DatagramSocket socket;
 	private int timeout;
 
 	public ClientHandler(String webAddress, InetAddress clientIP, int clientPort, int timeout) throws SocketException {
@@ -24,8 +23,6 @@ class ClientHandler implements Runnable {
 		this.clientIP = clientIP;
 		this.clientPort = clientPort;
 		this.timeout = timeout;
-		this.socket = new DatagramSocket();
-		this.socket.setSoTimeout(this.timeout);
 	}
 
 	public byte[] getWebServerRes() throws IOException, InterruptedException {
@@ -40,7 +37,6 @@ class ClientHandler implements Runnable {
 
 		byte[] resBody;
 		HttpResponse<byte[]> res = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
-		System.out.println("Status: " + res.statusCode());
 		resBody = res.body();
 		return resBody;
 	}
@@ -52,6 +48,8 @@ class ClientHandler implements Runnable {
 		int offset = 0;
 		int seqNum = 0;
 
+		DatagramSocket socket = new DatagramSocket();
+		socket.setSoTimeout(timeout * 1000);
 		while (offset < totalBytes) {
 			int bytesRemaining = totalBytes - offset;
 			int currentChunkSize = Math.min(chunkSize, bytesRemaining);
@@ -99,15 +97,19 @@ class ClientHandler implements Runnable {
 						System.out.println("ACK mismatch. Resending chunk " + (offset / chunkSize + 1));
 					}
 				} catch (SocketTimeoutException e) {
-					System.out.println(e.getMessage());
+					System.out.println("Timeout waiting for ACK. Resending chunk " + (offset / chunkSize + 1));
+					// e.printStackTrace();
 				}
 			}
 		}
+		System.out.println("All chunks sent successfully to client: " + clientIP + ":" + clientPort);
+		socket.close();
 	}
 
 	@Override
 	public void run() {
 		try {
+			// socket.setSoTimeout(this.timeout * 1000);
 			byte[] serverResponse = getWebServerRes();
 			sendResToClient(serverResponse);
 		} catch (IOException e) {
@@ -121,12 +123,10 @@ class ClientHandler implements Runnable {
 public class NetServerV2 {
 	public static void main(String[] args) throws Exception {
 
-		// Scanner scanner = new Scanner(System.in);
-		// System.out.println("Enter a timeout in seconds for the server to wait for a
-		// client request:");
-		// int timeout = scanner.nextInt();
-		int timeout = 10;
-		// scanner.close();
+		Scanner scanner = new Scanner(System.in);
+		System.out.println("Enter a timeout in seconds for the server to wait for a client request:");
+		int timeout = scanner.nextInt();
+		scanner.close();
 
 		DatagramSocket serverSocket = new DatagramSocket(11122);
 
@@ -138,31 +138,25 @@ public class NetServerV2 {
 				}));
 
 		while (true) {
-			try {
-				byte[] receiveData = new byte[1024];
-				DatagramPacket clientPacket = new DatagramPacket(receiveData, receiveData.length);
-				// Anticipate client request
-				serverSocket.receive(clientPacket);
-				System.out.println(clientPacket.getPort());
-				// byte [] to String conversion
-				String webAddress = new String(
-						clientPacket.getData(),
-						0,
-						clientPacket.getLength());
+			byte[] receiveData = new byte[1024];
+			DatagramPacket clientPacket = new DatagramPacket(receiveData, receiveData.length);
+			// Anticipate client request
+			serverSocket.receive(clientPacket);
+			// byte [] to String conversion
+			String webAddress = new String(
+					clientPacket.getData(),
+					0,
+					clientPacket.getLength());
 
-				System.out.println("Received: " + webAddress);
+			System.out.println("Received: " + webAddress);
 
-				ClientHandler client = new ClientHandler(webAddress,
-						clientPacket.getAddress(),
-						clientPacket.getPort(),
-						timeout);
+			ClientHandler client = new ClientHandler(webAddress,
+					clientPacket.getAddress(),
+					clientPacket.getPort(),
+					timeout);
 
-				// Start a new thread to handle the client request
-				new Thread(client).start();
-			} catch (SocketException e) {
-				e.printStackTrace();
-				break;
-			}
+			// Start a new thread to handle the client request
+			new Thread(client).start();
 		}
 	}
 }

@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Scanner;
 
 class Message {
@@ -44,21 +45,30 @@ public class JavaNetClientV2 {
         clientSocket.send(webServerPacket);
     }
 
-    public static Message receiveResponseFromServer() throws IOException {
+    public static HashMap<String, Object> receiveResponseFromServer() throws IOException {
         // Receive the response from the server
         // Sequence number + payload length + payload
         byte[] datagramBuffer = new byte[(Integer.BYTES * 2) + CHUNK_SIZE];
         DatagramPacket datagramFromServer = new DatagramPacket(datagramBuffer, datagramBuffer.length);
         clientSocket.receive(datagramFromServer);
-        System.out.println(clientSocket.getPort());
 
         ByteBuffer serverBuffer = ByteBuffer.wrap(datagramFromServer.getData(), 0, datagramFromServer.getLength());
 
-        return new Message(
-                // sequence number
-                serverBuffer.getInt(),
-                // payload
-                new String(serverBuffer.array(), serverBuffer.position(), serverBuffer.remaining()));
+        int serverPort = datagramFromServer.getPort();
+        int seqNum = serverBuffer.getInt();
+        int payloadLength = serverBuffer.getInt();
+        byte[] payloadBytes = new byte[payloadLength];
+        serverBuffer.get(payloadBytes);
+
+        String payload = new String(payloadBytes);
+
+        return new HashMap<String, Object>() {
+            {
+                put("seqNum", seqNum);
+                put("port", serverPort);
+                put("payload", payload);
+            }
+        };
     }
 
     public static void main(String args[]) throws Exception {
@@ -73,7 +83,11 @@ public class JavaNetClientV2 {
         boolean fullResReceived = false;
         ByteArrayOutputStream fullRes = new ByteArrayOutputStream();
         while (!fullResReceived) {
-            Message msg = receiveResponseFromServer();
+            HashMap<String, Object> response = receiveResponseFromServer();
+            Message msg = new Message(
+                    (Integer) response.get("seqNum"),
+                    (String) response.get("payload"));
+
             System.out.println(
                     "Received chunk with sequence number: " + msg.getSeqNum() + ", length: " + msg.getLength());
             // Accumulate each chunk of the response
@@ -88,7 +102,7 @@ public class JavaNetClientV2 {
                     ackBuffer.array(),
                     Integer.BYTES,
                     SERVER_ADDRESS,
-                    PORT);
+                    (Integer) response.get("port"));
 
             // Send ACK back to server
             clientSocket.send(ackPacket);
