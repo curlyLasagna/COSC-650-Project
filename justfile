@@ -9,15 +9,13 @@ compile:
 # Run the server
 server: compile
     @echo "Starting server..."
-    java -cp bin NetServerV2
+    java -cp bin BLServer
     @echo "Server started in background."
 
 # Run the client
 client: compile
     @echo "Starting client..."
-    # Give the server a moment to start up
-    sleep 2
-    java -cp bin JavaNetClientV2
+    java -cp bin BLClient
 
 # Clean up compiled classes
 clean:
