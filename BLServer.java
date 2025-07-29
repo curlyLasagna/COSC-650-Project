@@ -163,12 +163,12 @@ class ClientHandler implements Runnable {
 		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
 		} finally {
-			NetServerV2.removeClient(clientPort);
+			BLServer.removeClient(clientPort);
 		}
 	}
 }
 
-public class NetServerV2 {
+public class BLServer {
 
 	// Map to hold client handlers by their port number
 	private static final ConcurrentHashMap<Integer, ClientHandler> clientHandlers = new ConcurrentHashMap<>();

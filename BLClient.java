@@ -28,7 +28,7 @@ class Message {
     }
 }
 
-public class JavaNetClientV2 {
+public class BLClient {
 
     final static int PORT = 11122;
     final static int CHUNK_SIZE = 1024;
